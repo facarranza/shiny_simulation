@@ -1,0 +1,1257 @@
+"
+***************************************************************************
+simulation_escenario.R
+---------------------
+Date                 : May 2025
+Copyright            : (C) 2025 by Felipe Carranza
+Email                : fcarranza@protonmail.com
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GPL-3 License *
+*                                                                         *
+*                                                                         *
+***************************************************************************
+
+__author__ = 'Felipe Carranza'
+__date__ = 'May 2025'
+__copyright__ = '(C) 2025, Felipe Carranza'
+"
+
+library(shiny)
+library(shinydashboard)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(triangle)
+library(pls)
+library(chillR)
+library(dendextend)
+library(bnlearn)
+library(decisionSupport)
+library(dplyr)
+library(visNetwork)
+library(reshape2)
+
+# UI Definition
+ui <- dashboardPage(
+  dashboardHeader(
+    title = span(
+      tagList(
+        icon("bolt"), 
+        "EU Energy Security Intelligence System",
+        tags$small("v2.0 | Scenario Analysis Tool")
+      )
+    ),
+    titleWidth = 450
+  ),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Executive Summary", tabName = "resumen", icon = icon("tachometer-alt")),
+      menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
+      menuItem("Monte Carlo", tabName = "mc_sim", icon = icon("random")),
+      menuItem("Scenarios", tabName = "escenarios", icon = icon("project-diagram")),
+      menuItem("Sensitivity", tabName = "sensibilidad", icon = icon("chart-line")),
+     # menuItem("SWOT Analysis", tabName = "dafo", icon = icon("clipboard-list")),
+      menuItem("Results", tabName = "resultados", icon = icon("table")),
+      menuItem("Distributions", tabName = "distribuciones", icon = icon("chart-bar")),
+      menuItem("MICMAC", tabName = "micmac", icon = icon("project-diagram")),
+      menuItem("Bayesian Network", tabName = "bayesiana", icon = icon("project-diagram"))
+    ),
+    
+    sliderInput("n_sim", "Number of simulations:", 
+                min = 1000, max = 10000, value = 5000, step = 1000),
+    
+    actionButton("run_sim", "Run Simulations", icon = icon("play"),
+                 style = "color: #fff; background-color: #337ab7; border-color: #2e6da4")
+  ),
+  
+  dashboardBody(
+    tabItems(
+      # Executive Summary Panel
+      tabItem(tabName = "resumen",
+              fluidRow(
+                box(plotlyOutput("resumenImpactoPlot"), width = 6),
+                box(plotlyOutput("resumenRiesgoPlot"), width = 6)
+              ), 
+              fluidRow(
+                box(
+                  title = "EU Energy Security Analysis", 
+                  status = "primary", 
+                  solidHeader = TRUE,
+                  width = 12,
+                  div(
+                    style = "text-align: center;",
+                    h2("European Energy Security Intelligence System"),
+                    tags$hr(),
+                    fluidRow(
+                      column(
+                        width = 6,
+                        h3(icon("random"), "Monte Carlo Model"),
+                        p("Probabilistic simulation evaluating:"),
+                        tags$ul(
+                          tags$li("Energy security scenarios"),
+                          tags$li("Optimistic/pessimistic outcomes"),
+                          tags$li("Risk distributions")
+                        ),
+                        br(),
+                        h4(icon("chart-line"), "Key Metric:"),
+                        p("Total Impact = (Renewables Benefits + Nuclear Stability) - (Gas Risks + Geopolitical Threats)"),
+                        div(
+                          style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px;",
+                          "Higher renewables investment → Positive impact | Gas dependence → Negative impact"
+                        )
+                      ),
+                      column(
+                        width = 6,
+                        h3(icon("search-dollar"), "Critical Variables"),
+                        plotlyOutput("portadaRadar", height = "300px"),
+                        p("PLS analysis identifies key drivers:")
+                      )
+                    )
+                  )
+                )
+              )
+      ),
+      
+      # Main Dashboard Panel
+      tabItem(tabName = "dashboard",
+              fluidRow(
+                valueBoxOutput("impactoTotalBox", width = 4),
+                valueBoxOutput("deficitEnergeticoBox", width = 4),
+                valueBoxOutput("blackSwanBox", width = 4)
+              ),
+              fluidRow(
+                box(plotlyOutput("histImpactoTotal"), width = 6,
+                    title = "Total Impact Distribution", status = "primary"),
+                box(plotlyOutput("probCrisis"), width = 6,
+                    title = "Probability of Severe Crisis", status = "danger")
+              ),
+              fluidRow(
+                box(plotlyOutput("histBeneficioRenov"), width = 6,
+                    title = "Renewables Benefit", status = "warning"),
+                box(plotlyOutput("histImpactoGas"), width = 6,
+                    title = "Gas Supply Risk Impact", status = "success")
+              )
+      ),
+      
+      # Monte Carlo Simulations Panel
+      tabItem(tabName = "mc_sim",
+              h2("Monte Carlo Simulation Results"),
+              fluidRow(
+                box(plotlyOutput("mcDensidad"), width = 12,
+                    title = "Outcome Distribution", status = "info")
+              ),
+              fluidRow(
+                box(plotlyOutput("mcCorrelacion"), width = 6,
+                    title = "Correlation with Total Impact", status = "info"),
+                box(plotlyOutput("mcHeatmap"), width = 6,
+                    title = "Correlation Heatmap", status = "info")
+              )
+      ),
+      
+      # Scenario Analysis Panel
+      tabItem(tabName = "escenarios",
+              h2("Scenario Analysis"),
+              fluidRow(
+                box(plotlyOutput("escenarioPlot"), width = 12,
+                    title = "Scenario Comparison", status = "primary")
+              ),
+              fluidRow(
+                box(plotlyOutput("deltaPlot"), width = 12,
+                    title = "Deltas vs Baseline Scenario", status = "info")
+              ),
+              fluidRow(
+                box(DTOutput("escenarioTable"), width = 12,
+                    title = "Comparative Table", status = "success")
+              )
+      ),
+      
+      # Sensitivity Analysis Panel
+      tabItem(tabName = "sensibilidad",
+              h2("Sensitivity Analysis by Scenario"),
+              fluidRow(
+                box(plotlyOutput("plsImpactoTotal"), width = 12,
+                    title = "Sensitivity - Total Impact", status = "primary")
+              ),
+              fluidRow(
+                box(plotlyOutput("plsDeficitEnergetico"), width = 12,
+                    title = "Sensitivity - Energy Deficit", status = "warning")
+              ),
+              fluidRow(
+                box(plotlyOutput("plsBlackSwan"), width = 12,
+                    title = "Sensitivity - Black Swan Risk", status = "danger")
+              )
+      ),
+      
+      # SWOT Analysis Panel
+      tabItem(tabName = "dafo",
+              h2("SWOT Analysis of European Energy Situation"),
+              fluidRow(
+                box(
+                  title = "Strengths", status = "success", solidHeader = TRUE,
+                  tags$ul(
+                    tags$li("High institutional awareness of energy security"),
+                    tags$li("Common regulatory framework (Green Deal, REPowerEU)"),
+                    tags$li("Progressive diversification of energy suppliers"),
+                    tags$li("Technological and industrial capacity to accelerate renewables"),
+                    tags$li("EU-NATO coordination on critical infrastructure and cybersecurity")
+                  ),
+                  width = 6
+                ),
+                box(
+                  title = "Weaknesses", status = "danger", solidHeader = TRUE,
+                  tags$ul(
+                    tags$li("High dependence on external energy sources (>60% imports)"),
+                    tags$li("Incomplete energy transition and uneven infrastructure"),
+                    tags$li("Lack of full interconnection between electricity and gas networks"),
+                    tags$li("Lack of autonomy in critical materials (uranium, lithium)"),
+                    tags$li("High exposure to cyber threats on energy systems")
+                  ),
+                  width = 6
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Opportunities", status = "info", solidHeader = TRUE,
+                  tags$ul(
+                    tags$li("Massive investment in renewables, hydrogen and energy storage"),
+                    tags$li("Strategic alliances with reliable suppliers (USA, Norway, Africa)"),
+                    tags$li("Development of strategic autonomy in clean technologies")
+                  ),
+                  width = 6
+                ),
+                box(
+                  title = "Threats", status = "warning", solidHeader = TRUE,
+                  tags$ul(
+                    tags$li("Possible geopolitical conflicts affecting supply (Russia, Iran...)"),
+                    tags$li("Physical sabotage or cyberattacks on critical infrastructure"),
+                    tags$li("Extreme effects of climate change on energy supply/demand"),
+                    tags$li("Social instability due to price crises or rationing"),
+                    tags$li("Persistence of hostile actors in energy mix (Russia, China)")
+                  ),
+                  width = 6
+                )
+              )
+      ),
+      
+      # Results Panel
+      tabItem(tabName = "resultados",
+              h2("Detailed Results"),
+              DTOutput("resultadosTable"),
+              h3("Statistical Summary"),
+              DTOutput("resumenTable")
+      ),
+      
+      # Input Distributions Panel
+      tabItem(tabName = "distribuciones",
+              h2("Input Variable Distributions"),
+              fluidRow(
+                box(plotlyOutput("distGasRuso"), width = 4,
+                    title = "Probability of Russian Gas Cutoff"),
+                box(plotlyOutput("distUranioRuso"), width = 4,
+                    title = "Dependence on Russian Uranium"),
+                box(plotlyOutput("distPrecioGas"), width = 4,
+                    title = "Probability of Gas Price Increase")
+              ),
+              fluidRow(
+                box(plotlyOutput("distInversionRenov"), width = 4,
+                    title = "Annual Renewables Investment"),
+                box(plotlyOutput("distReactorFalla"), width = 4,
+                    title = "Nuclear Reactor Failure Risk"),
+                box(plotlyOutput("distCapacidadNuclear"), width = 4,
+                    title = "Operational Nuclear Capacity")
+              )
+      ),
+      
+      # MICMAC Analysis Panel
+      tabItem(tabName = "micmac",
+              tabsetPanel(
+                tabPanel("Severe Crisis Scenario", 
+                         plotlyOutput("micmacPesimista"),
+                         visNetworkOutput("redBayesianaPesimista", height = "800px"),
+                         DTOutput("tablaPesimista"), 
+                         box(title = "Dependency Dendrogram", width = 12,
+                             plotOutput("dendroDepPesimista", height = "600px")),
+                         box(title = "Influence Dendrogram", width = 12,
+                             plotOutput("dendroInfPesimista", height = "600px"))),
+                tabPanel("Baseline Scenario", 
+                         plotlyOutput("micmacContinuista"),
+                         visNetworkOutput("redBayesianaContinuista", height = "800px"),
+                         DTOutput("tablaContinuista")),
+                tabPanel("Successful Transition", 
+                         plotlyOutput("micmacOptimista"),
+                         visNetworkOutput("redBayesianaOptimista", height = "800px"),
+                         DTOutput("tablaOptimista"))
+              )
+      ),
+      
+      # Bayesian Network Panel
+      tabItem(tabName = "bayesiana",
+              fluidRow(
+                box(title = "Bayesian Network", width = 12, height = 22,
+                    visNetworkOutput("redBayesianaPlot", width = "100%", height = "800px")
+                )
+              )
+      )
+    )
+  )
+)
+
+# Server Logic
+server <- function(input, output) {
+  
+  # Input parameters table
+  input_table <- data.frame(
+    variable = c(
+      "prob_corte_gas_ruso", "prob_uranio_ruso", "precio_gas",
+      "inversion_renovables", "prob_reactor_falla", "capacidad_nuclear",
+      "choque_geopolitico", "aceleracion_tecnologica", "presion_actores",
+      "voluntad_politica"
+    ),
+    distribution = rep("triang", 10),
+    lower = c(0.05, 0.15, 0.38, 0.35, 0.04, 0.30, 0.10, 0.10, 0.30, 0.10),
+    median = c(0.55, 0.22, 0.60, 0.45, 0.05, 0.67, 0.30, 0.40, 0.40, 0.40),
+    upper = c(0.70, 0.30, 0.98, 0.55, 0.06, 0.80, 0.60, 0.50, 0.60, 0.80),
+    stringsAsFactors = FALSE
+  )
+  
+  # Model function for European energy security
+  model_function <- function(...) {
+    args <- list(...)
+    
+    # Calculate impacts
+    impacto_gas <- args$prob_corte_gas_ruso * args$precio_gas * 200000000000
+    falla_reactores <- rbinom(1, size = 19, prob = args$prob_reactor_falla)
+    impacto_nuclear_falla <- (falla_reactores/19) * args$capacidad_nuclear * (25/450000000)
+    impacto_uranio <- args$prob_uranio_ruso * 7000000
+    penalizacion_choque <- args$choque_geopolitico * 27000000000
+    debilidad_actores <- (1 - args$presion_actores) * 40143000000
+    
+    # Calculate benefits
+    beneficio_renov <- args$inversion_renovables * (59000000000/3)
+    mitigacion_tec <- args$aceleracion_tecnologica * args$inversion_renovables * 1241000000000
+    oportunidad_voluntad <- args$voluntad_politica * 40143000000
+    
+    # Final results
+    impacto_total <- (beneficio_renov + mitigacion_tec + oportunidad_voluntad) - 
+      (impacto_gas + impacto_nuclear_falla + impacto_uranio + penalizacion_choque + debilidad_actores)
+    
+    deficit_energetico <- impacto_gas + impacto_nuclear_falla + impacto_uranio
+    
+    # Black swan and white swan indicators
+    cisne_negro <- ifelse(args$choque_geopolitico > 0.5 & args$prob_corte_gas_ruso > 0.6, 1, 0)
+    cisne_blanco <- ifelse(args$aceleracion_tecnologica > 0.8 & args$inversion_renovables > 0.6, 1, 0)
+    
+    return(data.frame(
+      impacto_total = impacto_total,
+      deficit_energetico = deficit_energetico,
+      beneficio_renov = beneficio_renov,
+      impacto_gas = impacto_gas,
+      cisne_negro = cisne_negro,
+      cisne_blanco = cisne_blanco,
+      crisis_severa = ifelse(args$prob_corte_gas_ruso > 0.6 & args$inversion_renovables < 0.4 & args$voluntad_politica < 0.3, 1, 0),
+      transicion_exitosa = ifelse(args$inversion_renovables > 0.5 & args$voluntad_politica > 0.7 & args$aceleracion_tecnologica > 0.7, 1, 0)
+    ))
+  }
+  
+  # Simulation reactive function
+  simulaciones <- eventReactive(input$run_sim, {
+    n <- input$n_sim
+    p <- input_table
+    
+    # Generate triangular distributions
+    inputs_sim <- sapply(1:nrow(p), function(i) {
+      rtriangle(n, a = p$lower[i], b = p$upper[i], c = p$median[i])
+    })
+    
+    colnames(inputs_sim) <- p$variable
+    inputs_sim <- as.data.frame(inputs_sim)
+    
+    # Apply model function
+    resultados <- do.call(model_function, inputs_sim)
+    
+    # Create combined object
+    sims_combinado <- cbind(sim_id = 1:n, inputs_sim, resultados)
+    
+    # Create mcSimulation object for PLS
+    mc_result <- list(
+      y = resultados,
+      x = inputs_sim,
+      call = match.call()
+    )
+    class(mc_result) <- c("mcSimulation", "list")
+    
+    list(
+      combinado = sims_combinado,
+      mc = mc_result
+    )
+  })
+  
+  # PLS analysis function
+  run_pls_analysis <- function(data, outcome_var) {
+    if(!inherits(data, "mcSimulation")) return(NULL)
+       
+       X <- as.data.frame(data$x)
+       Y <- data$y[[outcome_var]]
+       
+       if(nrow(X) == 0 || length(Y) == 0 || nrow(X) != length(Y)) return(NULL)
+       
+       pls_model <- tryCatch({
+         pls_model <- plsr(Y ~ ., data = X, ncomp = min(2, ncol(X)), 
+                           validation = "CV", method = "oscorespls")
+         if(length(coef(pls_model)) == 0) stop("No coefficients")
+         pls_model
+       }, error = function(e) NULL)
+       
+       if(is.null(pls_model)) return(NULL)
+       
+       vip_scores <- tryCatch(chillR::VIP(pls_model)[,1], error = function(e) rep(NA, ncol(X)))
+       coef_values <- tryCatch(as.numeric(coef(pls_model)), error = function(e) rep(NA, ncol(X)))
+       
+       data.frame(
+         Variable = colnames(X),
+         VIP = vip_scores,
+         Coef = coef_values,
+         stringsAsFactors = FALSE
+       )
+  }
+  
+  # Scenario analysis
+  escenarios <- reactive({
+    sims <- simulaciones()$combinado
+    
+    escenario_pesimista <- sims[sims$crisis_severa == 1, ]
+    escenario_continuista <- sims[sims$crisis_severa == 0 & sims$transicion_exitosa == 0, ]
+    escenario_optimista <- sims[sims$transicion_exitosa == 1, ]
+    
+    # Calculate deltas
+    inversion_continuista <- mean(escenario_continuista$inversion_renovables)
+    impacto_continuista <- mean(escenario_continuista$impacto_total)
+    
+    tabla_escenarios <- data.frame(
+      Scenario = c("Severe Crisis", "Baseline", "Successful Transition"),
+      Renewables_Investment = c(
+        mean(escenario_pesimista$inversion_renovables),
+        inversion_continuista,
+        mean(escenario_optimista$inversion_renovables)
+      ),
+      Total_Impact = c(
+        mean(escenario_pesimista$impacto_total),
+        impacto_continuista,
+        mean(escenario_optimista$impacto_total)
+      ),
+      Black_Swan_Prob = c(
+        mean(escenario_pesimista$cisne_negro),
+        mean(escenario_continuista$cisne_negro),
+        mean(escenario_optimista$cisne_negro)
+      ),
+      White_Swan_Prob = c(
+        mean(escenario_pesimista$cisne_blanco),
+        mean(escenario_continuista$cisne_blanco),
+        mean(escenario_optimista$cisne_blanco)
+      )
+    )
+    
+    # Add deltas
+    tabla_escenarios$Delta_Investment_vs_Baseline <- c(
+      (tabla_escenarios$Renewables_Investment[1] - tabla_escenarios$Renewables_Investment[2]) / tabla_escenarios$Renewables_Investment[2] * 100,
+      0,
+      (tabla_escenarios$Renewables_Investment[3] - tabla_escenarios$Renewables_Investment[2]) / tabla_escenarios$Renewables_Investment[2] * 100
+    )
+    
+    tabla_escenarios$Delta_Impact_vs_Baseline <- c(
+      (tabla_escenarios$Total_Impact[1] - tabla_escenarios$Total_Impact[2]) / abs(tabla_escenarios$Total_Impact[2]) * 100,
+      0,
+      (tabla_escenarios$Total_Impact[3] - tabla_escenarios$Total_Impact[2]) / abs(tabla_escenarios$Total_Impact[2]) * 100
+    )
+    
+    tabla_escenarios
+  })
+  
+  # PLS results
+  pls_result <- reactive({
+    sims <- simulaciones()$mc
+    if(is.null(sims)) return(NULL)
+    
+    run_pls_analysis(sims, "impacto_total")
+  })
+  
+  pls_result_deficit <- reactive({
+    sims <- simulaciones()$mc
+    if(is.null(sims)) return(NULL)
+    
+    run_pls_analysis(sims, "deficit_energetico")
+  })
+  
+  pls_result_blackswan <- reactive({
+    sims <- simulaciones()$mc
+    if(is.null(sims)) return(NULL)
+    
+    run_pls_analysis(sims, "cisne_negro")
+  })
+  
+  pls_por_escenario <- function(indices, sims_mc, resultado = "impacto_total") {
+    tryCatch({
+      x_sub <- sims_mc$x[indices, , drop = FALSE]
+      y_sub <- sims_mc$y[indices, resultado, drop = FALSE]
+      
+      obj_mc <- list(
+        x = x_sub,
+        y = y_sub,
+        call = match.call()
+      )
+      class(obj_mc) <- c("mcSimulation", "list")
+      
+      plsr_resultados <- plsr.mcSimulation(object = obj_mc, resultName = resultado)
+      
+      vip_scores <- chillR::VIP(plsr_resultados)[1,]
+      coef_values <- as.numeric(coef(plsr_resultados))
+      
+      data.frame(
+        Variable = names(x_sub),
+        VIP = vip_scores,
+        Coef = coef_values,
+        stringsAsFactors = FALSE
+      )
+    }, error = function(e) {
+      message("Error en el PLS del escenario: ", e$message)
+      return(NULL)
+    })
+  }
+  
+  
+  # MICMAC analysis by scenario
+  micmac_por_escenario <- reactive({
+    sims_completo <- simulaciones()
+    sims_mc <- sims_completo$mc
+    sims_df <- sims_completo$combinado
+    
+    if (is.null(sims_mc) || is.null(sims_df)) return(NULL)
+    
+    idx_pesimista <- which(sims_df$crisis_severa == 1)
+    idx_continuista <- which(sims_df$crisis_severa == 0 & sims_df$transicion_exitosa == 0)
+    idx_optimista <- which(sims_df$transicion_exitosa == 1)
+    
+    list(
+      pesimista = pls_por_escenario(idx_pesimista, sims_mc),
+      continuista = pls_por_escenario(idx_continuista, sims_mc),
+      optimista = pls_por_escenario(idx_optimista, sims_mc)
+    )
+  })
+  
+  # Generate influence matrix for MICMAC
+  generar_matriz_influencias <- function(pls_data) {
+    if (is.null(pls_data) || nrow(pls_data) == 0) return(NULL)
+    
+    n <- nrow(pls_data)
+    var_names <- pls_data$Variable
+    scores <- numeric()
+    
+    for (i in 1:n) {
+      for (j in 1:n) {
+        if (i != j) {
+          val <- abs(pls_data$Coef[i]) * pls_data$VIP[j]
+          scores <- c(scores, val)
+        }
+      }
+    }
+    
+    q1 <- quantile(scores, 0.25)
+    q2 <- quantile(scores, 0.5)
+    q3 <- quantile(scores, 0.75)
+    
+    mat <- matrix(0, n, n)
+    rownames(mat) <- colnames(mat) <- var_names
+    
+    for (i in 1:n) {
+      for (j in 1:n) {
+        if (i != j) {
+          val <- abs(pls_data$Coef[i]) * pls_data$VIP[j]
+          score <- if (val <= q1) 0 else if (val <= q2) 1 else if (val <= q3) 2 else 3
+          mat[i, j] <- score
+        }
+      }
+    }
+    return(mat)
+  }
+  
+  # Calculate dependency and influence
+  calcular_dependencia_influencia <- function(matriz) {
+    if (is.null(matriz)) return(NULL)
+    
+    influencia <- rowSums(matriz)
+    dependencia <- colSums(matriz)
+    
+    media_inf <- mean(influencia)
+    media_dep <- mean(dependencia)
+    
+    clasificacion <- mapply(function(i, d) {
+      if (i < media_inf && d < media_dep) return("Autonomous")
+      if (i < media_inf && d >= media_dep) return("Output")
+      if (i >= media_inf && d >= media_dep) return("Conflict")
+      if (i >= media_inf && d < media_dep) return("Power")
+    }, influencia, dependencia)
+    
+    data.frame(
+      Variable = names(influencia),
+      Influence = influencia,
+      Dependency = dependencia,
+      Classification = clasificacion,
+      stringsAsFactors = FALSE
+    )
+  }
+  
+  # Generate Bayesian network from MICMAC matrix
+  generar_bn_desde_matriz_micmac <- function(matriz_influencia, sims_df = NULL, umbral = 0) {
+    if (is.null(matriz_influencia)) return(NULL)
+    
+    if (is.data.frame(matriz_influencia)) {
+      matriz_influencia <- as.matrix(matriz_influencia)
+    }
+    
+    nodos <- rownames(matriz_influencia)
+    
+    # Create empty graph
+    red <- empty.graph(nodes = nodos)
+    
+    # Clean arcs to avoid cycles
+    arcos <- list()
+    for (i in seq_along(nodos)) {
+      for (j in seq_along(nodos)) {
+        if (i != j) {
+          peso_ij <- matriz_influencia[i,j]
+          peso_ji <- matriz_influencia[j,i]
+          
+          if (peso_ij > umbral & peso_ij > peso_ji) {
+            arcos <- append(arcos, list(c(nodos[i], nodos[j])))
+          }
+        }
+      }
+    }
+    
+    # Set arcs in the network
+    if (length(arcos) > 0) {
+      arcs_mat <- do.call(rbind, arcos)
+      red <- empty.graph(nodes = nodos)
+      arcs(red) <- arcs_mat
+    }
+    
+    if (is.null(sims_df)) {
+      return(list(estructura = red))
+    }
+    
+    datos_bn <- sims_df %>%
+      dplyr::select(any_of(nodos)) %>%
+      dplyr::mutate(dplyr::across(dplyr::everything(), ~ as.factor(round(.)))) %>%
+      dplyr::select(where(~ length(unique(.)) > 1))
+    
+    nodos_filtrados <- colnames(datos_bn)
+    red <- empty.graph(nodes = nodos_filtrados)
+    
+    arcos_filtrados <- arcs_mat[
+      arcs_mat[,1] %in% nodos_filtrados & 
+        arcs_mat[,2] %in% nodos_filtrados, , drop = FALSE
+    ]
+    
+    if (nrow(arcos_filtrados) > 0) {
+      arcs(red) <- arcos_filtrados
+    }
+    
+    red_fit <- bn.fit(red, datos_bn)
+    
+    return(list(estructura = red, red = red_fit, datos = datos_bn))
+  }
+  
+  # Generate dendrogram for MICMAC
+  generar_dendrograma <- function(matriz, tipo = "dependencia") {
+    if (is.null(matriz)) return(NULL)
+    
+    if (tipo == "dependencia") {
+      data <- t(matriz)
+    } else {
+      data <- matriz
+    }
+    
+    distancias <- dist(data, method = "euclidean")
+    cluster <- hclust(distancias, method = "ward.D2")
+    dend <- as.dendrogram(cluster)
+    
+    return(dend)
+  }
+  
+  # Render MICMAC plot
+  render_micmac_plot <- function(pls_data) {
+    matriz <- generar_matriz_influencias(pls_data)
+    if (is.null(matriz)) return(plotly_empty())
+    
+    resumen <- calcular_dependencia_influencia(matriz)
+    if (is.null(resumen)) return(plotly_empty())
+    
+    mean_x <- mean(resumen$Influence)
+    mean_y <- mean(resumen$Dependency)
+    
+    plot_ly(resumen, x = ~Influence, y = ~Dependency,
+            text = ~paste(Variable, "<br>Classification:", Classification),
+            type = 'scatter', mode = 'markers+text',
+            textposition = 'top center',
+            color = ~Classification,
+            colors = c("Power" = "#1f77b4", "Conflict" = "#ff7f0e",
+                       "Autonomous" = "#2ca02c", "Output" = "#d62728"),
+            marker = list(size = 10)) |>
+      layout(title = "MICMAC - Influence vs Dependency",
+             xaxis = list(title = "Total Influence"),
+             yaxis = list(title = "Total Dependency"),
+             shapes = list(
+               list(type = "line", x0 = mean_x, x1 = mean_x, y0 = 0, y1 = max(resumen$Dependency), line = list(dash = "dot")),
+               list(type = "line", x0 = 0, x1 = max(resumen$Influence), y0 = mean_y, y1 = mean_y, line = list(dash = "dot"))
+             ))
+  }
+  
+  # Render BN plot
+  render_bn_plot <- function(pls_data, sims_df) {
+    matriz <- generar_matriz_influencias(pls_data)
+    bn_result <- generar_bn_desde_matriz_micmac(matriz_influencia = matriz, sims_df = sims_df)
+    if (is.null(bn_result)) return(NULL)
+    
+    nodos <- data.frame(
+      id = nodes(bn_result$estructura),
+      label = nodes(bn_result$estructura)
+    )
+    
+    aristas <- as.data.frame(arcs(bn_result$estructura))
+    colnames(aristas) <- c("from", "to")
+    
+    visNetwork(nodos, aristas, width = "100%", height = "800px") %>%
+      visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE) %>%
+      visInteraction(dragNodes = TRUE, dragView = TRUE, zoomView = TRUE) %>%
+      visPhysics(
+        solver = "forceAtlas2Based",
+        forceAtlas2Based = list(
+          gravitationalConstant = -50,
+          centralGravity = 0.01,
+          springLength = 200,
+          springConstant = 0.01
+        ),
+        stabilization = list(enabled = TRUE, iterations = 1000)
+      ) %>%
+      visLayout(randomSeed = 123)
+  }
+  
+  # Outputs for MICMAC tab
+  output$micmacPesimista <- renderPlotly({
+    pls <- micmac_por_escenario()$pesimista
+    render_micmac_plot(pls)
+  })
+  
+  output$tablaPesimista <- renderDT({
+    pls <- micmac_por_escenario()$pesimista
+    matriz <- generar_matriz_influencias(pls)
+    calcular_dependencia_influencia(matriz)
+  })
+  
+  output$micmacContinuista <- renderPlotly({
+    pls <- micmac_por_escenario()$continuista
+    render_micmac_plot(pls)
+  })
+  
+  output$tablaContinuista <- renderDT({
+    pls <- micmac_por_escenario()$continuista
+    matriz <- generar_matriz_influencias(pls)
+    calcular_dependencia_influencia(matriz)
+  })
+  
+  output$micmacOptimista <- renderPlotly({
+    pls <- micmac_por_escenario()$optimista
+    render_micmac_plot(pls)
+  })
+  
+  output$tablaOptimista <- renderDT({
+    pls <- micmac_por_escenario()$optimista
+    matriz <- generar_matriz_influencias(pls)
+    calcular_dependencia_influencia(matriz)
+  })
+  
+  # Dendrograms for MICMAC
+  output$dendroDepPesimista <- renderPlot({
+    pls <- micmac_por_escenario()$pesimista
+    matriz <- generar_matriz_influencias(pls)
+    dend <- generar_dendrograma(matriz, tipo = "dependencia")
+    dend <- dend %>% set("labels_cex", 0.8)
+    if (!is.null(dend)) plot(dend, main = "Dependency Dendrogram - Severe Crisis")
+  })
+  
+  output$dendroInfPesimista <- renderPlot({
+    pls <- micmac_por_escenario()$pesimista
+    matriz <- generar_matriz_influencias(pls)
+    dend <- generar_dendrograma(matriz, tipo = "influencia")
+    dend <- dend %>% set("labels_cex", 0.8)
+    if (!is.null(dend)) plot(dend, main = "Influence Dendrogram - Severe Crisis")
+  })
+  
+  # Bayesian network outputs
+  output$redBayesianaPesimista <- renderVisNetwork({
+    pls <- micmac_por_escenario()$pesimista
+    sims_df <- simulaciones()$combinado
+    render_bn_plot(pls, sims_df)
+  })
+  
+  output$redBayesianaContinuista <- renderVisNetwork({
+    pls <- micmac_por_escenario()$continuista
+    sims_df <- simulaciones()$combinado
+    render_bn_plot(pls, sims_df)
+  })
+  
+  output$redBayesianaOptimista <- renderVisNetwork({
+    pls <- micmac_por_escenario()$optimista
+    sims_df <- simulaciones()$combinado
+    render_bn_plot(pls, sims_df)
+  })
+  
+  output$redBayesianaPlot <- renderVisNetwork({
+    pls <- pls_result()
+    sims_df <- simulaciones()$combinado
+    render_bn_plot(pls, sims_df)
+  })
+  
+  # Value Boxes
+  output$impactoTotalBox <- renderValueBox({
+    sims <- simulaciones()$combinado
+    valor <- mean(sims$impacto_total)/1e9
+    valueBox(
+      paste0("€", format(round(valor, 1), nsmall = 1), "B"), 
+      "Total Impact (EUR)", 
+      icon = icon("euro-sign"),
+      color = ifelse(valor > 0, "green", "red")
+    )
+  })
+  
+  output$deficitEnergeticoBox <- renderValueBox({
+    sims <- simulaciones()$combinado
+    valor <- mean(sims$deficit_energetico)/1e9
+    valueBox(
+      paste0("€", format(round(valor, 1), nsmall = 1), "B"), 
+      "Energy Deficit", 
+      icon = icon("bolt"),
+      color = "orange"
+    )
+  })
+  
+  output$blackSwanBox <- renderValueBox({
+    sims <- simulaciones()$combinado
+    valor <- mean(sims$cisne_negro)*100
+    valueBox(
+      paste0(round(valor, 1), "%"), 
+      "Black Swan Risk", 
+      icon = icon("exclamation-triangle"),
+      color = "red"
+    )
+  })
+  
+  # Executive Summary outputs
+  output$resumenImpactoPlot <- renderPlotly({
+    sims <- simulaciones()$combinado
+    
+    data <- data.frame(
+      Metric = c("Total Impact", "Renewables Benefit", "Gas Risk Impact"),
+      Value = c(
+        mean(sims$impacto_total)/1e9,
+        mean(sims$beneficio_renov)/1e9,
+        mean(sims$impacto_gas)/1e9
+      )
+    )
+    
+    plot_ly(data, x = ~Metric, y = ~Value, type = "bar",
+            marker = list(color = c("#1f77b4", "#ff7f0e", "#d62728"))) |>
+      layout(title = "Average Impacts (billions EUR)",
+             yaxis = list(title = "Billions EUR"),
+             xaxis = list(title = ""))
+  })
+  
+  output$resumenRiesgoPlot <- renderPlotly({
+    sims <- simulaciones()$combinado
+    
+    data <- data.frame(
+      Metric = c("Black Swan", "White Swan"),      Value = c(
+        mean(sims$cisne_negro)*100,
+        mean(sims$cisne_blanco)*100
+      )
+    )
+    
+    plot_ly(data, x = ~Metric, y = ~Value, type = "bar",
+            marker = list(color = c("#d62728", "#2ca02c"))) |>
+      layout(title = "Extreme Scenario Probabilities (%)",
+             yaxis = list(title = "Probability (%)", range = c(0, 100)),
+             xaxis = list(title = ""))
+  })
+  
+  # Radar plot for critical variables
+  output$portadaRadar <- renderPlotly({
+    pls_data <- pls_result()
+    
+    if(is.null(pls_data)) {
+      return(plotly_empty() |> 
+               layout(title = "Run simulations first to see PLS results"))
+    }
+    
+    # Normalize VIP scores (0-1)
+    pls_data$VIP_normalized <- (pls_data$VIP - min(pls_data$VIP)) / 
+      (max(pls_data$VIP) - min(pls_data$VIP))
+    
+    plot_ly(
+      type = 'scatterpolar',
+      r = pls_data$VIP_normalized,
+      theta = pls_data$Variable,
+      fill = 'toself',
+      mode = 'lines+markers',
+      line = list(color = '#1f77b4', width = 2),
+      marker = list(
+        size = 8,
+        color = ifelse(pls_data$Coef > 0, '#2ca02c', '#d62728'),
+        symbol = ifelse(pls_data$Coef > 0, 'circle', 'x')
+      ),
+      hoverinfo = 'text',
+      text = ~paste(
+        "Variable:", pls_data$Variable,
+        "<br>Importance (VIP):", round(pls_data$VIP, 2),
+        "<br>Coefficient:", round(pls_data$Coef, 3),
+        "<br>Effect:", ifelse(pls_data$Coef > 0, "Positive", "Negative")
+      )
+    ) |>
+      layout(
+        title = "Variable Importance (Normalized VIP)",
+        polar = list(
+          radialaxis = list(
+            visible = TRUE,
+            range = c(0, 1),
+            tickvals = seq(0, 1, 0.2),
+            ticktext = paste0(seq(0, 100, 20), "%")
+          )
+        ),
+        showlegend = FALSE,
+        margin = list(l = 50, r = 50, b = 50, t = 50)
+      )
+  })
+  
+  # Dashboard plots
+  output$histImpactoTotal <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$impacto_total/1e9, type = "histogram", 
+            nbinsx = 30, marker = list(color = "#1f77b4"),
+            hoverinfo = "x+y") |>
+      layout(title = "Total Impact Distribution (billions EUR)",
+             xaxis = list(title = "Total Impact (billions EUR)"),
+             yaxis = list(title = "Frequency"))
+  })
+  
+  output$histBeneficioRenov <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$beneficio_renov/1e9, type = "histogram",
+            marker = list(color = "#ff7f0e"),
+            hoverinfo = "x+y") |>
+      layout(title = "Renewables Benefit Distribution (billions EUR)",
+             xaxis = list(title = "Benefit (billions EUR)"))
+  })
+  
+  output$histImpactoGas <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$impacto_gas/1e9, type = "histogram",
+            marker = list(color = "#d62728"),
+            hoverinfo = "x+y") |>
+      layout(title = "Gas Risk Impact Distribution (billions EUR)",
+             xaxis = list(title = "Impact (billions EUR)"))
+  })
+  
+  output$probCrisis <- renderPlotly({
+    sims <- simulaciones()$combinado
+    prob <- mean(sims$crisis_severa)
+    plot_ly(x = "Severe Crisis", y = prob, type = "bar",
+            marker = list(color = ifelse(prob > 0.25, "red", "green")),
+            text = paste("Probability:", round(prob*100, 1), "%"),
+            hoverinfo = "text") |>
+      layout(title = paste("Probability:", round(prob*100, 1), "%"),
+             yaxis = list(title = "Probability", range = c(0, 1)))
+  })
+  
+  # Monte Carlo plots
+  output$mcDensidad <- renderPlotly({
+    sims <- simulaciones()$combinado
+    
+    plot_ly(alpha = 0.6) |>
+      add_trace(x = ~sims$impacto_total/1e9, type = "histogram", 
+                name = "Total Impact", marker = list(color = "#1f77b4")) |>
+      add_trace(x = ~sims$beneficio_renov/1e9, type = "histogram",
+                name = "Renewables Benefit", marker = list(color = "#ff7f0e")) |>
+      add_trace(x = ~ -1*(sims$impacto_gas)/1e9, type = "histogram",
+                name = "Gas Risk", marker = list(color = "#d62728")) |>
+      layout(title = "Outcome Distribution (billions EUR)",
+             barmode = "overlay",
+             xaxis = list(title = "Billions EUR"),
+             yaxis = list(title = "Density"))
+  })
+  
+  output$mcCorrelacion <- renderPlotly({
+    sims <- simulaciones()$combinado
+    
+    vars <- c("prob_corte_gas_ruso", "prob_uranio_ruso", "precio_gas",
+              "inversion_renovables", "prob_reactor_falla", "capacidad_nuclear",
+              "choque_geopolitico", "aceleracion_tecnologica", "presion_actores",
+              "voluntad_politica")
+    
+    corrs <- sapply(vars, function(v) cor(sims[[v]], sims$impacto_total))
+    
+    data <- data.frame(
+      Variable = gsub("_", " ", vars),
+      Correlation = corrs
+    )
+    
+    plot_ly(data, x = ~reorder(Variable, Correlation), y = ~Correlation, type = "bar",
+            marker = list(color = ~Correlation,
+                          colorscale = list(c(-1, 0, 1), list("red", "white", "blue"))),
+            text = ~paste(Variable, ":", round(Correlation, 2)),
+            hoverinfo = "text") |>
+      layout(title = "Correlation with Total Impact",
+             xaxis = list(title = ""),
+             yaxis = list(title = "Correlation Coefficient", range = c(-1, 1)))
+  })
+  
+  # Correlation heatmap
+  output$mcHeatmap <- renderPlotly({
+    sims <- simulaciones()$combinado
+    
+    vars <- c("prob_corte_gas_ruso", "prob_uranio_ruso", "precio_gas",
+              "inversion_renovables", "prob_reactor_falla", "capacidad_nuclear",
+              "choque_geopolitico", "aceleracion_tecnologica", "presion_actores",
+              "voluntad_politica", "impacto_total", "beneficio_renov", "impacto_gas")
+    
+    cor_matrix <- cor(sims[, vars])
+    
+    plot_ly(x = gsub("_", " ", colnames(cor_matrix)), 
+            y = gsub("_", " ", rownames(cor_matrix)), 
+            z = cor_matrix, 
+            type = "heatmap",
+            colorscale = "RdBu",
+            zmin = -1, zmax = 1) |>
+      layout(title = "Correlation Matrix",
+             xaxis = list(title = ""),
+             yaxis = list(title = ""))
+  })
+  
+  # Scenario plots
+  output$escenarioPlot <- renderPlotly({
+    esc <- escenarios()
+    
+    plot_ly(esc, x = ~Scenario, y = ~Total_Impact/1e9, type = "bar",
+            name = "Average Impact", marker = list(color = "#1f77b4"),
+            text = ~paste("€", round(Total_Impact/1e9, 1), "B"),
+            hoverinfo = "text") |>
+      add_trace(y = ~Renewables_Investment*100, name = "Renewables Investment (%)", 
+                marker = list(color = "#ff7f0e"),
+                text = ~paste(round(Renewables_Investment*100, 1), "%"),
+                hoverinfo = "text") |>
+      layout(title = "Scenario Comparison",
+             yaxis = list(title = "Billions EUR / Percentage"),
+             barmode = "group")
+  })
+  
+  output$deltaPlot <- renderPlotly({
+    esc <- escenarios()
+    
+    plot_ly(esc, x = ~Scenario) |>
+      add_trace(y = ~Delta_Investment_vs_Baseline, name = "Δ Investment vs Baseline", 
+                type = "bar", marker = list(color = "#9467bd"),
+                text = ~paste(round(Delta_Investment_vs_Baseline, 1), "%"),
+                hoverinfo = "text") |>
+      add_trace(y = ~Delta_Impact_vs_Baseline, name = "Δ Impact vs Baseline", 
+                type = "bar", marker = list(color = "#8c564b"),
+                text = ~paste(round(Delta_Impact_vs_Baseline, 1), "%"),
+                hoverinfo = "text") |>
+      layout(title = "Deltas vs Baseline Scenario (%)",
+             yaxis = list(title = "Percentage"),
+             barmode = "group")
+  })
+  
+  # Scenario table
+  output$escenarioTable <- renderDT({
+    esc <- escenarios()
+    datatable(esc, options = list(pageLength = 3)) |>
+      formatCurrency(columns = c("Total_Impact"), 
+                     currency = "€", digits = 0) |>
+      formatPercentage(columns = c("Renewables_Investment", "Black_Swan_Prob", 
+                                   "White_Swan_Prob", "Delta_Investment_vs_Baseline", 
+                                   "Delta_Impact_vs_Baseline"), 
+                       digits = 1)
+  })
+  
+  # Results tables
+  output$resultadosTable <- renderDT({
+    sims <- simulaciones()$combinado
+    cols <- c("impacto_total", "deficit_energetico", "beneficio_renov",
+              "impacto_gas", "cisne_negro", "cisne_blanco")
+    
+    datatable(sims[, cols], 
+              options = list(pageLength = 10, scrollX = TRUE),
+              rownames = FALSE) |>
+      formatCurrency(columns = cols, currency = "€", digits = 0)
+  })
+  
+  output$resumenTable <- renderDT({
+    sims <- simulaciones()$combinado
+    resumen <- data.frame(
+      Metric = c("Total Impact", "Energy Deficit", "Renewables Benefit",
+                 "Gas Risk Impact", "Black Swan Prob", "White Swan Prob",
+                 "Severe Crisis Prob", "Successful Transition Prob"),
+      Mean = c(mean(sims$impacto_total), mean(sims$deficit_energetico),
+               mean(sims$beneficio_renov), mean(sims$impacto_gas),
+               mean(sims$cisne_negro), mean(sims$cisne_blanco),
+               mean(sims$crisis_severa), mean(sims$transicion_exitosa)),
+      SD = c(sd(sims$impacto_total), sd(sims$deficit_energetico),
+             sd(sims$beneficio_renov), sd(sims$impacto_gas),
+             sd(sims$cisne_negro), sd(sims$cisne_blanco),
+             sd(sims$crisis_severa), sd(sims$transicion_exitosa)),
+      P5 = c(quantile(sims$impacto_total, 0.05), quantile(sims$deficit_energetico, 0.05),
+             quantile(sims$beneficio_renov, 0.05), quantile(sims$impacto_gas, 0.05),
+             quantile(sims$cisne_negro, 0.05), quantile(sims$cisne_blanco, 0.05),
+             quantile(sims$crisis_severa, 0.05), quantile(sims$transicion_exitosa, 0.05)),
+      P95 = c(quantile(sims$impacto_total, 0.95), quantile(sims$deficit_energetico, 0.95),
+              quantile(sims$beneficio_renov, 0.95), quantile(sims$impacto_gas, 0.95),
+              quantile(sims$cisne_negro, 0.95), quantile(sims$cisne_blanco, 0.95),
+              quantile(sims$crisis_severa, 0.95), quantile(sims$transicion_exitosa, 0.95)),
+      stringsAsFactors = FALSE
+    )
+    
+    datatable(resumen, options = list(pageLength = 8)) |>
+      formatCurrency(columns = c("Mean", "SD", "P5", "P95"), currency = "€", digits = 0)
+  })
+  
+  # Distribution plots
+  output$distGasRuso <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$prob_corte_gas_ruso, type = "histogram", name = "Russian Gas Cutoff") |>
+      layout(title = "Probability of Russian Gas Cutoff",
+             xaxis = list(title = "Probability"))
+  })
+  
+  output$distUranioRuso <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$prob_uranio_ruso, type = "histogram", name = "Russian Uranium Dependence") |>
+      layout(title = "Dependence on Russian Uranium",
+             xaxis = list(title = "Dependence"))
+  })
+  
+  output$distPrecioGas <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$precio_gas, type = "histogram", name = "Gas Price Increase") |>
+      layout(title = "Probability of Gas Price Increase",
+             xaxis = list(title = "Probability"))
+  })
+  
+  output$distInversionRenov <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$inversion_renovables, type = "histogram", name = "Renewables Investment") |>
+      layout(title = "Annual Renewables Investment",
+             xaxis = list(title = "Percentage"))
+  })
+  
+  output$distReactorFalla <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$prob_reactor_falla, type = "histogram", name = "Reactor Failure Risk") |>
+      layout(title = "Nuclear Reactor Failure Risk",
+             xaxis = list(title = "Probability"))
+  })
+  
+  output$distCapacidadNuclear <- renderPlotly({
+    sims <- simulaciones()$combinado
+    plot_ly(x = ~sims$capacidad_nuclear, type = "histogram", name = "Nuclear Capacity") |>
+      layout(title = "Operational Nuclear Capacity",
+             xaxis = list(title = "Percentage"))
+  })
+  
+  # PLS plots
+  output$plsImpactoTotal <- renderPlotly({
+    pls_data <- pls_result()
+    
+    if(is.null(pls_data)) {
+      return(plotly_empty() |> 
+               layout(title = "Run simulations first to see PLS results"))
+    }
+    
+    pls_data$Sign <- ifelse(pls_data$Coef > 0, "Positive", "Negative")
+    
+    plot_ly(pls_data, x = ~reorder(Variable, -VIP), y = ~VIP, 
+            color = ~Sign, type = "bar",
+            colors = c("Negative" = "#d62728", "Positive" = "#2ca02c"),
+            hoverinfo = "text",
+            text = ~paste("Variable:", Variable,
+                          "<br>VIP:", round(VIP, 2),
+                          "<br>Coef:", format(Coef, scientific = TRUE, digits = 2))) |>
+      layout(title = "Sensitivity - Total Impact",
+             xaxis = list(title = "Variable"),
+             yaxis = list(title = "Importance (VIP)"),
+             legend = list(title = list(text = "Coefficient Sign")))
+  
+    # plot_ly(pls_data, x = ~reorder(Variable, -VIP), y = ~VIP, 
+    #         color = ~Signo, type = "bar",
+    #         colors = c("Negativo" = "#d62728", "Positivo" = "#2ca02c"),
+    #         hoverinfo = "text",
+    #         text = ~paste("Variable:", Variable,
+    #                       "<br>VIP:", round(VIP, 2),
+    #                       "<br>Coef:", format(Coef, scientific = TRUE, digits = 2))) |>
+    #   layout(title = "Sensibilidad - Impacto Total",
+    #          xaxis = list(title = "Variable"),
+    #          yaxis = list(title = "Importancia (VIP)"),
+    #          legend = list(title = list(text = "Signo Coef")))
+    # 
+    })
+  
+  output$plsDeficitEnergetico <- renderPlotly({
+    pls_data <- pls_result_deficit()
+    
+    if(is.null(pls_data)) {
+      return(plotly_empty() |> 
+               layout(title = "Run simulations first to see PLS results"))
+    }
+    
+    pls_data$Sign <- ifelse(pls_data$Coef > 0, "Positive", "Negative")
+    
+    plot_ly(pls_data, x = ~reorder(Variable, -VIP), y = ~VIP, 
+            color = ~Sign, type = "bar",
+            colors = c("Negative" = "#d62728", "Positive" = "#2ca02c"),
+            hoverinfo = "text",
+            text = ~paste("Variable:", Variable,
+                          "<br>VIP:", round(VIP, 2),
+                          "<br>Coef:", format(Coef, scientific = TRUE, digits = 2))) |>
+      layout(title = "Sensitivity - Energy Deficit",
+             xaxis = list(title = "Variable"),
+             yaxis = list(title = "Importance (VIP)"),
+             legend = list(title = list(text = "Coefficient Sign")))
+ # )
+  })
+    
+    output$plsBlackSwan <- renderPlotly({
+      pls_data <- pls_result_blackswan()
+      
+      if(is.null(pls_data)) {
+        return(plotly_empty() |> 
+                 layout(title = "Run simulations first to see PLS results"))
+      }
+      
+      pls_data$Sign <- ifelse(pls_data$Coef > 0, "Positive", "Negative")
+      
+      plot_ly(pls_data, x = ~reorder(Variable, -VIP), y = ~VIP, 
+              color = ~Sign, type = "bar",
+              colors = c("Negative" = "#d62728", "Positive" = "#2ca02c"),
+              hoverinfo = "text",
+              text = ~paste("Variable:", Variable,
+                            "<br>VIP:", round(VIP, 2),
+                            "<br>Coef:", format(Coef, scientific = TRUE, digits = 2))) |>
+        layout(title = "Sensitivity - Black Swan Risk",
+               xaxis = list(title = "Variable"),
+               yaxis = list(title = "Importance (VIP)"),
+               legend = list(title = list(text = "Coefficient Sign")))
+    #)
+    })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
